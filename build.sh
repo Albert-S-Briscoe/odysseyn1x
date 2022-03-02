@@ -201,7 +201,10 @@ umount work/chroot/dev
 cp work/chroot/vmlinuz work/iso/boot
 cp work/chroot/initrd.img work/iso/boot
 mksquashfs work/chroot work/iso/live/filesystem.squashfs -noappend -e boot -comp xz -Xbcj x86
-grub-mkrescue -o "odysseyn1x-$VERSION-$ARCH.iso" work/iso \
+
+## Creates output ISO dir (easier for GitHub Actions)
+mkdir -p out
+grub-mkrescue -o "out/odysseyn1x-$VERSION-$ARCH.iso" work/iso \
     --compress=xz \
     --fonts='' \
     --locales='' \

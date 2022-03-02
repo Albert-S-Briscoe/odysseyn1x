@@ -1,27 +1,76 @@
 name: Build odysseyn1x
 
-on:
-  push:
-    paths:
-      - 'build.sh'
+on: push
 
 jobs:
-
   build:
-
+    if: "!contains(github.event.head_commit.message, 'skip-ci')"
     runs-on: ubuntu-latest
-
     steps:
-
-    - uses: actions/checkout@v2
-
-    - name: Build for amd64
+    - 
+      name: Checkout
+      uses: actions/checkout@v2
+    -
+      name: Get version information
       run: |
-        sed -i "/Exit if user isn't root/aVERSION='$(cat version)'" build.sh
-        sed -i "/Exit if user isn't root/aARCH='amd64'" build.sh
-        sudo ./build.sh
-
-    - name: Build for i686
+        echo "VERSION=$(cat version)" >> $GITHUB_ENV
+    -
+      name: Build for amd64
+      env:
+        ARCH: amd64
       run: |
-        sed -i "s/ARCH='amd64'/ARCH='i686'/g" build.sh
-        sudo ./build.sh
+        sudo -E ./build.sh
+
+    -
+      name: Build for i686
+      env:
+        ARCH: i686
+      run: |
+        sudo -E ./build.sh
+    -
+      name: Upload artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        path: out/*
+
+  upload-prerelease:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+      -
+        name: Download artifacts
+        uses: actions/download-artifact@v2
+      -
+        name: Get version information
+        run: |
+          echo "version=$(cat version)" >> $GITHUB_ENV
+          echo "todayDate=$(date +%Y%m%dT%H%M%S)" >> $GITHUB_ENV
+      -
+        name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.todayDate }}
+          release_name: Prerelease ${{ env.todayDate }}
+          draft: false
+          prerelease: true
+      -
+        name: Attach binaries to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          todayDate: ${{ env.todayDate }}
+          version: ${{ env.version }}
+        run: |
+          set -x
+          mv ./artifact/odysseyn1x-$version-amd64.iso ./artifact/odysseyn1x-$todayDate-amd64.iso
+          mv ./artifact/odysseyn1x-$version-i686.iso ./artifact/odysseyn1x-$todayDate-i686.iso
+          assets=()
+          for asset in ./artifact/*; do
+            assets+=("-a" "$asset")
+          done
+          hub release edit "${assets[@]}" -m "This release was built on the latest code and may be unstable. USE AT YOUR OWN RISK!" $todayDate
